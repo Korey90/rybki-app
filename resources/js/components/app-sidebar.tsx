@@ -7,14 +7,17 @@ import {
     CreditCard,
     Database,
     Gauge,
+    Heart,
     LayoutGrid,
     MapPinned,
+    MessageSquare,
     RefreshCw,
     RotateCcw,
     Search,
     ShieldCheck,
     ScrollText,
     Wallet,
+    Users,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -50,6 +53,11 @@ const mainNavItems: NavItem[] = [
         href: '/konto/rezerwacje',
         icon: CalendarCheck,
     },
+    {
+        title: 'Ulubione',
+        href: '/konto/ulubione',
+        icon: Heart,
+    },
 ];
 
 const operatorNavItems: NavItem[] = [
@@ -77,6 +85,11 @@ const operatorNavItems: NavItem[] = [
         title: 'Kalendarz',
         href: '/operator/calendar',
         icon: CalendarDays,
+    },
+    {
+        title: 'Opinie',
+        href: '/operator/reviews',
+        icon: MessageSquare,
     },
     {
         title: 'Rozliczenia',
@@ -108,6 +121,36 @@ export function AppSidebar() {
         ? [
               ...baseNavItems,
               {
+                  title: 'Użytkownicy',
+                  href: '/admin/users',
+                  icon: Users,
+              },
+              {
+                  title: 'Operatorzy',
+                  href: '/admin/operators',
+                  icon: Building2,
+              },
+              {
+                  title: 'Organizacje',
+                  href: '/admin/organizations',
+                  icon: Building2,
+              },
+              {
+                  title: 'Łowiska admin',
+                  href: '/admin/fishing-venues',
+                  icon: MapPinned,
+              },
+              {
+                  title: 'Rezerwacje admin',
+                  href: '/admin/bookings',
+                  icon: ClipboardList,
+              },
+              {
+                  title: 'Płatności admin',
+                  href: '/admin/payments',
+                  icon: CreditCard,
+              },
+              {
                   title: 'Audit log',
                   href: '/admin/audit-logs',
                   icon: ScrollText,
@@ -136,6 +179,11 @@ export function AppSidebar() {
                   title: 'Claimy łowisk',
                   href: '/admin/venue-claims',
                   icon: ShieldCheck,
+              },
+              {
+                  title: 'Moderacja opinii',
+                  href: '/admin/reviews',
+                  icon: MessageSquare,
               },
           ]
         : baseNavItems;

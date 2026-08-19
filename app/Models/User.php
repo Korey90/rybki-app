@@ -4,9 +4,13 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\UserAccountType;
+use App\Modules\Bookings\Models\Booking;
+use App\Modules\Fisheries\Models\FishingVenue;
+use App\Modules\Legal\Models\LegalAcceptance;
 use App\Modules\Organizations\Enums\OrganizationMemberRole;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Organizations\Models\OrganizationMember;
+use App\Modules\Reviews\Models\FishingVenueReview;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -29,6 +33,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $phone
  * @property Carbon|null $email_verified_at
  * @property Carbon|null $phone_verified_at
+ * @property Carbon|null $marketing_consent_at
+ * @property string|null $marketing_consent_document_version
  * @property UserAccountType $account_type
  * @property bool $is_admin
  * @property string $password
@@ -56,6 +62,7 @@ class User extends Authenticatable implements PasskeyUser
         return [
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
+            'marketing_consent_at' => 'datetime',
             'account_type' => UserAccountType::class,
             'is_admin' => 'boolean',
             'password' => 'hashed',
@@ -86,6 +93,39 @@ class User extends Authenticatable implements PasskeyUser
         return $this->belongsToMany(Organization::class, 'organization_members')
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    /**
+     * @return BelongsToMany<FishingVenue, $this>
+     */
+    public function favoriteFishingVenues(): BelongsToMany
+    {
+        return $this->belongsToMany(FishingVenue::class, 'fishing_venue_favorites')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<FishingVenueReview, $this>
+     */
+    public function fishingVenueReviews(): HasMany
+    {
+        return $this->hasMany(FishingVenueReview::class);
+    }
+
+    /**
+     * @return HasMany<Booking, $this>
+     */
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
+    }
+
+    /**
+     * @return HasMany<LegalAcceptance, $this>
+     */
+    public function legalAcceptances(): HasMany
+    {
+        return $this->hasMany(LegalAcceptance::class);
     }
 
     public function canUseOperatorPanel(): bool

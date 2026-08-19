@@ -13,11 +13,13 @@ use App\Modules\Payments\Clients\StripeConnectHttpClient;
 use App\Modules\Payments\Contracts\PayUMarketplaceClient;
 use App\Modules\Payments\Contracts\StripeConnectClient;
 use App\Modules\Payments\Models\Payment;
+use App\Modules\Reviews\Models\FishingVenueReview;
 use App\Policies\AuditLogPolicy;
 use App\Policies\BookingPolicy;
 use App\Policies\FishingSpotPolicy;
 use App\Policies\FishingVenueClaimPolicy;
 use App\Policies\FishingVenuePolicy;
+use App\Policies\FishingVenueReviewPolicy;
 use App\Policies\OrganizationPolicy;
 use App\Policies\PaymentPolicy;
 use Carbon\CarbonImmutable;
@@ -85,6 +87,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(FishingSpot::class, FishingSpotPolicy::class);
         Gate::policy(FishingVenue::class, FishingVenuePolicy::class);
         Gate::policy(FishingVenueClaim::class, FishingVenueClaimPolicy::class);
+        Gate::policy(FishingVenueReview::class, FishingVenueReviewPolicy::class);
         Gate::policy(Organization::class, OrganizationPolicy::class);
         Gate::policy(Payment::class, PaymentPolicy::class);
     }

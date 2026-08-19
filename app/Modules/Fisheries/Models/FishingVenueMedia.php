@@ -2,6 +2,7 @@
 
 namespace App\Modules\Fisheries\Models;
 
+use App\Models\User;
 use App\Modules\Fisheries\Enums\FishingVenueMediaType;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -14,10 +15,13 @@ use Illuminate\Support\Carbon;
  * @property string $storage_path
  * @property FishingVenueMediaType $type
  * @property int $sort_order
+ * @property Carbon|null $hidden_at
+ * @property string|null $hidden_reason
+ * @property int|null $hidden_by_user_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['fishing_venue_id', 'storage_path', 'type', 'sort_order'])]
+#[Fillable(['fishing_venue_id', 'storage_path', 'type', 'sort_order', 'hidden_at', 'hidden_reason', 'hidden_by_user_id'])]
 class FishingVenueMedia extends Model
 {
     /**
@@ -29,6 +33,7 @@ class FishingVenueMedia extends Model
     {
         return [
             'type' => FishingVenueMediaType::class,
+            'hidden_at' => 'datetime',
         ];
     }
 
@@ -38,5 +43,13 @@ class FishingVenueMedia extends Model
     public function venue(): BelongsTo
     {
         return $this->belongsTo(FishingVenue::class, 'fishing_venue_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function hiddenBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'hidden_by_user_id');
     }
 }

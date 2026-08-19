@@ -12,9 +12,21 @@ import { store } from '@/routes/register';
 
 type Props = {
     passwordRules: string;
+    legal_documents: Record<
+        string,
+        {
+            title: string;
+            slug: string;
+            version: string;
+            url: string;
+        }
+    >;
 };
 
-export default function Register({ passwordRules }: Props) {
+export default function Register({ passwordRules, legal_documents }: Props) {
+    const terms = legal_documents.TERMS;
+    const privacyPolicy = legal_documents.PRIVACY_POLICY;
+
     return (
         <>
             <Head title="Rejestracja" />
@@ -151,10 +163,84 @@ export default function Register({ passwordRules }: Props) {
                                 />
                             </div>
 
+                            <div className="grid gap-3 rounded-lg border bg-card p-4 text-sm">
+                                <label className="flex items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        name="legal_terms_accepted"
+                                        value="1"
+                                        required
+                                        tabIndex={7}
+                                        className="mt-1 size-4 shrink-0 accent-primary"
+                                    />
+                                    <span className="leading-6">
+                                        Akceptuję{' '}
+                                        <TextLink
+                                            href={terms?.url ?? '/regulamin'}
+                                        >
+                                            regulamin
+                                        </TextLink>
+                                        {terms?.version
+                                            ? ` (wersja ${terms.version})`
+                                            : ''}
+                                        .
+                                    </span>
+                                </label>
+                                <InputError
+                                    message={errors.legal_terms_accepted}
+                                />
+
+                                <label className="flex items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        name="privacy_policy_accepted"
+                                        value="1"
+                                        required
+                                        tabIndex={8}
+                                        className="mt-1 size-4 shrink-0 accent-primary"
+                                    />
+                                    <span className="leading-6">
+                                        Zapoznałem się z{' '}
+                                        <TextLink
+                                            href={
+                                                privacyPolicy?.url ??
+                                                '/polityka-prywatnosci'
+                                            }
+                                        >
+                                            polityką prywatności
+                                        </TextLink>
+                                        {privacyPolicy?.version
+                                            ? ` (wersja ${privacyPolicy.version})`
+                                            : ''}
+                                        .
+                                    </span>
+                                </label>
+                                <InputError
+                                    message={errors.privacy_policy_accepted}
+                                />
+
+                                <label className="flex items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        name="marketing_consent"
+                                        value="1"
+                                        tabIndex={9}
+                                        className="mt-1 size-4 shrink-0 accent-primary"
+                                    />
+                                    <span className="leading-6 text-muted-foreground">
+                                        Chcę otrzymywać informacje o nowościach,
+                                        ofertach łowisk i rozwoju platformy.
+                                    </span>
+                                </label>
+                                <InputError
+                                    message={errors.marketing_consent}
+                                />
+                            </div>
+
                             <Button
                                 type="submit"
                                 className="mt-2 w-full"
-                                tabIndex={7}
+                                tabIndex={10}
                                 data-test="register-user-button"
                             >
                                 {processing && <Spinner />}
@@ -164,7 +250,7 @@ export default function Register({ passwordRules }: Props) {
 
                         <div className="text-center text-sm text-muted-foreground">
                             Masz już konto?{' '}
-                            <TextLink href={login()} tabIndex={8}>
+                            <TextLink href={login()} tabIndex={11}>
                                 Zaloguj się
                             </TextLink>
                         </div>

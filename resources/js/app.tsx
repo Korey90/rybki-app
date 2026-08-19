@@ -19,6 +19,8 @@ createInertiaApp({
                 return AuthLayout;
             case name.startsWith('marketplace/'):
                 return PublicLayout;
+            case name.startsWith('legal/'):
+                return PublicLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
             default:

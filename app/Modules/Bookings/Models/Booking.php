@@ -5,13 +5,16 @@ namespace App\Modules\Bookings\Models;
 use App\Models\User;
 use App\Modules\Bookings\Enums\BookingStatus;
 use App\Modules\Fisheries\Models\FishingVenue;
+use App\Modules\Legal\Models\LegalAcceptance;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Payments\Models\Payment;
 use App\Modules\Payments\Models\Refund;
+use App\Modules\Reviews\Models\FishingVenueReview;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -163,5 +166,21 @@ class Booking extends Model
     public function notificationLogs(): HasMany
     {
         return $this->hasMany(BookingNotificationLog::class);
+    }
+
+    /**
+     * @return HasMany<LegalAcceptance, $this>
+     */
+    public function legalAcceptances(): HasMany
+    {
+        return $this->hasMany(LegalAcceptance::class);
+    }
+
+    /**
+     * @return HasOne<FishingVenueReview, $this>
+     */
+    public function review(): HasOne
+    {
+        return $this->hasOne(FishingVenueReview::class);
     }
 }

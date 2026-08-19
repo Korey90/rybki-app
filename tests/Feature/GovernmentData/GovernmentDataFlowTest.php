@@ -143,6 +143,9 @@ test('information-only venues are visible in marketplace and API but cannot be b
         'ends_at' => '2026-08-12T12:00:00Z',
         'customer_name' => 'Jan Kowalski',
         'customer_email' => 'jan@example.com',
+        'legal_terms_accepted' => '1',
+        'privacy_policy_accepted' => '1',
+        'cancellation_rules_accepted' => '1',
     ])->assertNotFound();
 });
 

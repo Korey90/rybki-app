@@ -10,6 +10,8 @@ export type User = {
     avatar?: string;
     email_verified_at: string | null;
     phone_verified_at?: string | null;
+    marketing_consent_at?: string | null;
+    marketing_consent_document_version?: string | null;
     two_factor_enabled?: boolean;
     created_at: string;
     updated_at: string;

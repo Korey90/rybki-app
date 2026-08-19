@@ -5,6 +5,10 @@ namespace App\Http\Controllers\Marketplace;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Availability\Services\AvailabilityService;
+use App\Modules\Bookings\Enums\BookingStatus;
+use App\Modules\Bookings\Enums\ReservationStatus;
+use App\Modules\Bookings\Models\Booking;
+use App\Modules\Bookings\Models\SpotReservation;
 use App\Modules\Fisheries\Enums\FishingSpotStatus;
 use App\Modules\Fisheries\Enums\FishingVenueCommercialStatus;
 use App\Modules\Fisheries\Enums\FishingVenueStatus;
@@ -17,9 +21,11 @@ use App\Modules\Fisheries\Models\FishSpecies;
 use App\Modules\Fisheries\Queries\FishingVenueGeoQuery;
 use App\Modules\Fisheries\Support\FishingMediaPayload;
 use App\Modules\GovernmentData\Models\FishingVenueSource;
+use App\Modules\Legal\Support\CurrentLegalDocuments;
 use App\Modules\Organizations\Models\OrganizationMember;
 use App\Modules\Organizations\Queries\ManageableOrganizations;
 use App\Modules\Pricing\Services\PricingService;
+use App\Modules\Reviews\Models\FishingVenueReview;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -34,6 +40,7 @@ class FishingVenueController extends Controller
         private readonly PricingService $pricingService,
         private readonly FishingMediaPayload $fishingMediaPayload,
         private readonly FishingVenueGeoQuery $fishingVenueGeoQuery,
+        private readonly CurrentLegalDocuments $currentLegalDocuments,
     ) {}
 
     /**
@@ -48,6 +55,7 @@ class FishingVenueController extends Controller
         $latitude = $this->coordinateFilter($filters, 'latitude');
         $longitude = $this->coordinateFilter($filters, 'longitude');
         $radiusKm = $this->integerFilter($filters, 'radius_km');
+        $user = $request->user();
         $sortByDistance = $latitude !== null
             && $longitude !== null
             && ((string) Arr::get($filters, 'sort', 'distance') === 'distance');
@@ -57,8 +65,13 @@ class FishingVenueController extends Controller
                 'spots' => fn ($query) => $query->where('status', FishingSpotStatus::Active->value)->orderBy('base_price_amount'),
                 'fishSpecies',
                 'amenities',
-                'media' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
+                'media' => fn ($query) => $query->whereNull('hidden_at')->orderBy('sort_order')->orderBy('id'),
             ])
+            ->withCount(['publishedReviews as reviews_count'])
+            ->withAvg('publishedReviews as rating_average', 'rating')
+            ->when($user instanceof User, fn (Builder $query) => $query->withExists([
+                'favorites as is_favorited' => fn (Builder $query) => $query->where('user_id', $user->id),
+            ]))
             ->when(Arr::get($filters, 'q'), function (Builder $query, string $search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query
@@ -76,7 +89,14 @@ class FishingVenueController extends Controller
             ->orderBy('name')
             ->limit(50)
             ->get()
-            ->map(fn (FishingVenue $venue): array => $this->venueListPayload($venue, $startsAt, $endsAt, $latitude, $longitude))
+            ->map(fn (FishingVenue $venue): array => $this->venueListPayload(
+                $venue,
+                $startsAt,
+                $endsAt,
+                $latitude,
+                $longitude,
+                $user instanceof User ? $user : null,
+            ))
             ->when(
                 $availableOnly && $startsAt !== null && $endsAt !== null,
                 fn ($venues) => $venues->filter(fn (array $venue): bool => (int) $venue['available_spots_count'] > 0)->values(),
@@ -118,21 +138,35 @@ class FishingVenueController extends Controller
         $endsAt = $this->dateFilter($filters, 'ends_at');
 
         $fishingVenue->load([
-            'media' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
+            'media' => fn ($query) => $query->whereNull('hidden_at')->orderBy('sort_order')->orderBy('id'),
             'spots' => fn ($query) => $query
-                ->with(['media' => fn ($query) => $query->orderBy('sort_order')->orderBy('id')])
+                ->with(['media' => fn ($query) => $query->whereNull('hidden_at')->orderBy('sort_order')->orderBy('id')])
                 ->where('status', FishingSpotStatus::Active->value)
                 ->orderBy('sort_order')
                 ->orderBy('name'),
             'fishSpecies',
             'amenities',
             'sources.dataSource',
+            'publishedReviews' => fn ($query) => $query->with('user')->latest()->limit(20),
         ]);
 
         $user = $request->user();
+        $fishingVenue->loadCount(['publishedReviews as reviews_count']);
+        $fishingVenue->loadAvg('publishedReviews as rating_average', 'rating');
+
+        if ($user instanceof User) {
+            $fishingVenue->loadExists([
+                'favorites as is_favorited' => fn (Builder $query) => $query->where('user_id', $user->id),
+            ]);
+        }
 
         return Inertia::render('marketplace/fishing-venues/show', [
-            'venue' => $this->venueDetailPayload($fishingVenue, $startsAt, $endsAt),
+            'venue' => $this->venueDetailPayload(
+                $fishingVenue,
+                $startsAt,
+                $endsAt,
+                $user instanceof User ? $user : null,
+            ),
             'availability_query' => [
                 'starts_at' => Arr::get($filters, 'starts_at'),
                 'ends_at' => Arr::get($filters, 'ends_at'),
@@ -145,6 +179,7 @@ class FishingVenueController extends Controller
                 ])
                 ->values()
                 ->all(),
+            'legal_documents' => $this->currentLegalDocuments->payload(),
         ]);
     }
 
@@ -226,6 +261,7 @@ class FishingVenueController extends Controller
         ?CarbonImmutable $endsAt,
         ?float $originLatitude = null,
         ?float $originLongitude = null,
+        ?User $user = null,
     ): array {
         $availableSpotsCount = null;
 
@@ -239,6 +275,14 @@ class FishingVenueController extends Controller
         $firstSpot = $venue->spots->first();
         $currency = $firstSpot instanceof FishingSpot ? $firstSpot->currency : 'PLN';
         $primaryMedia = $venue->media->first();
+        $ratingAverage = $venue->getAttribute('rating_average');
+        $isFavorited = $venue->getAttribute('is_favorited');
+
+        if ($isFavorited === null && $user instanceof User) {
+            $isFavorited = $venue->favorites()
+                ->where('user_id', $user->id)
+                ->exists();
+        }
 
         return [
             'uuid' => $venue->uuid,
@@ -261,6 +305,9 @@ class FishingVenueController extends Controller
             'distance_km' => $this->fishingVenueGeoQuery->distanceKm($venue, $originLatitude, $originLongitude),
             'starting_price_amount' => $startingPrice !== null ? (int) $startingPrice : null,
             'currency' => $currency,
+            'rating_average' => $ratingAverage !== null ? round((float) $ratingAverage, 1) : null,
+            'reviews_count' => (int) ($venue->getAttribute('reviews_count') ?? 0),
+            'is_favorited' => (bool) $isFavorited,
             'fish_species' => $venue->fishSpecies->map(fn (FishSpecies $species): array => [
                 'name' => $species->name,
                 'slug' => $species->slug,
@@ -276,10 +323,10 @@ class FishingVenueController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function venueDetailPayload(FishingVenue $venue, ?CarbonImmutable $startsAt, ?CarbonImmutable $endsAt): array
+    private function venueDetailPayload(FishingVenue $venue, ?CarbonImmutable $startsAt, ?CarbonImmutable $endsAt, ?User $user): array
     {
         return [
-            ...$this->venueListPayload($venue, $startsAt, $endsAt),
+            ...$this->venueListPayload($venue, $startsAt, $endsAt, user: $user),
             'address' => $venue->address,
             'postal_code' => $venue->postal_code,
             'country' => $venue->country,
@@ -302,6 +349,8 @@ class FishingVenueController extends Controller
                 'last_synced_at' => $source->last_synced_at?->toIso8601String(),
             ])->values()->all(),
             'spots' => $venue->spots->map(fn (FishingSpot $spot): array => $this->spotPayload($spot, $startsAt, $endsAt))->values()->all(),
+            'reviews' => $venue->publishedReviews->map(fn (FishingVenueReview $review): array => $this->reviewPayload($review))->values()->all(),
+            'review_eligibility' => $this->reviewEligibilityPayload($user, $venue),
         ];
     }
 
@@ -338,6 +387,79 @@ class FishingVenueController extends Controller
                 ->all(),
             'availability' => $availability,
             'price' => $price,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function reviewPayload(FishingVenueReview $review): array
+    {
+        return [
+            'uuid' => $review->uuid,
+            'rating' => $review->rating,
+            'title' => $review->title,
+            'body' => $review->body,
+            'operator_response' => $review->operator_response,
+            'operator_responded_at' => $review->operator_responded_at?->toIso8601String(),
+            'created_at' => $review->created_at?->toIso8601String(),
+            'author' => [
+                'name' => $review->user->name,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function reviewEligibilityPayload(?User $user, FishingVenue $venue): array
+    {
+        if (! $user instanceof User) {
+            return [
+                'can_review' => false,
+                'reason' => 'login_required',
+                'bookings' => [],
+            ];
+        }
+
+        $bookings = Booking::query()
+            ->with('spotReservations')
+            ->where('user_id', $user->id)
+            ->where('fishing_venue_id', $venue->id)
+            ->where('status', BookingStatus::Confirmed->value)
+            ->whereDoesntHave('review')
+            ->whereHas('spotReservations', fn (Builder $query) => $query
+                ->where('status', ReservationStatus::Confirmed->value)
+                ->where('ends_at', '<=', now()))
+            ->latest()
+            ->limit(5)
+            ->get();
+
+        return [
+            'can_review' => $bookings->isNotEmpty(),
+            'reason' => $bookings->isNotEmpty() ? null : 'no_completed_booking',
+            'bookings' => $bookings
+                ->map(fn (Booking $booking): array => $this->reviewableBookingPayload($booking))
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private function reviewableBookingPayload(Booking $booking): array
+    {
+        $reservation = $booking->spotReservations
+            ->sortByDesc('ends_at')
+            ->first();
+
+        return [
+            'uuid' => $booking->uuid,
+            'booking_number' => $booking->booking_number,
+            'visited_at' => $reservation instanceof SpotReservation
+                ? $reservation->ends_at->toIso8601String()
+                : null,
         ];
     }
 

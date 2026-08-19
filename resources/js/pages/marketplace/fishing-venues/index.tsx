@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { Filter, MapPinned, Search } from 'lucide-react';
+import { Filter, Heart, MapPinned, Search, Star } from 'lucide-react';
 import { GoogleVenueMap } from '@/components/google-venue-map';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
@@ -184,6 +184,20 @@ export default function MarketplaceFishingVenuesIndex({
                                                 {venue.description ??
                                                     'Profil łowiska jest w przygotowaniu.'}
                                             </p>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <RatingBadge
+                                                    average={
+                                                        venue.rating_average
+                                                    }
+                                                    count={venue.reviews_count}
+                                                />
+                                                {venue.is_favorited && (
+                                                    <Badge variant="outline">
+                                                        <Heart className="size-3 fill-current" />
+                                                        Ulubione
+                                                    </Badge>
+                                                )}
+                                            </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {venue.fish_species
                                                     ?.slice(0, 3)
@@ -314,6 +328,30 @@ function VenueThumb({ venue }: { venue: PublicVenue }) {
                 <MapPinned className="size-4 text-primary" />
             </div>
         </div>
+    );
+}
+
+function RatingBadge({
+    average,
+    count,
+}: {
+    average: number | null;
+    count: number;
+}) {
+    if (average === null || count === 0) {
+        return (
+            <Badge variant="outline">
+                <Star className="size-3" />
+                Brak opinii
+            </Badge>
+        );
+    }
+
+    return (
+        <Badge variant="secondary">
+            <Star className="size-3 fill-current" />
+            {average.toFixed(1)} ({count})
+        </Badge>
     );
 }
 

@@ -16,6 +16,9 @@ use App\Modules\Fisheries\Enums\FishingVenueCommercialStatus;
 use App\Modules\Fisheries\Enums\FishingVenueStatus;
 use App\Modules\Fisheries\Models\FishingSpot;
 use App\Modules\Fisheries\Models\FishingVenue;
+use App\Modules\Legal\Actions\RecordLegalAcceptance;
+use App\Modules\Legal\Enums\LegalDocumentType;
+use App\Modules\Legal\Models\LegalAcceptance;
 use App\Modules\Payments\Actions\CreateBookingPayment;
 use App\Modules\Payments\Actions\HandlePaymentWebhook;
 use App\Modules\Payments\Enums\PaymentProvider;
@@ -42,7 +45,8 @@ class CheckoutController extends Controller
     public function store(
         StoreCheckoutRequest $request,
         CreateBookingHold $createBookingHold,
-        CreateBookingPayment $createBookingPayment
+        CreateBookingPayment $createBookingPayment,
+        RecordLegalAcceptance $recordLegalAcceptance
     ): RedirectResponse {
         $validated = $request->validated();
         $spot = FishingSpot::query()
@@ -64,6 +68,24 @@ class CheckoutController extends Controller
             $paymentSession = $createBookingPayment->handle(
                 booking: $booking,
             );
+
+            $user = $request->user();
+            $user = $user instanceof User ? $user : null;
+
+            foreach ([
+                LegalDocumentType::Terms,
+                LegalDocumentType::PrivacyPolicy,
+                LegalDocumentType::CancellationRules,
+            ] as $documentType) {
+                $recordLegalAcceptance->handle(
+                    $documentType,
+                    'checkout',
+                    user: $user,
+                    booking: $booking,
+                    customerEmail: (string) $validated['customer_email'],
+                    request: $request,
+                );
+            }
         } catch (BookingHoldUnavailable $exception) {
             return back()
                 ->withErrors(['fishing_spot_uuid' => $this->availabilityMessage($exception->reason)])
@@ -84,7 +106,7 @@ class CheckoutController extends Controller
      */
     public function show(Booking $booking, PaymentGatewayManager $paymentGatewayManager): Response
     {
-        $booking->load(['venue', 'spotReservations.spot', 'priceLines', 'payments']);
+        $booking->load(['venue', 'spotReservations.spot', 'priceLines', 'payments', 'legalAcceptances']);
 
         return Inertia::render('marketplace/checkout/show', [
             'booking' => $this->bookingPayload($booking),
@@ -193,6 +215,12 @@ class CheckoutController extends Controller
                 'currency' => $payment->currency,
                 'paid_at' => $payment->paid_at?->toIso8601String(),
                 'failed_at' => $payment->failed_at?->toIso8601String(),
+            ])->values()->all(),
+            'legal_acceptances' => $booking->legalAcceptances->map(fn (LegalAcceptance $acceptance): array => [
+                'document_type' => $acceptance->document_type->value,
+                'document_version' => $acceptance->document_version,
+                'context' => $acceptance->context,
+                'accepted_at' => $acceptance->accepted_at->toIso8601String(),
             ])->values()->all(),
             'cancellation_policy' => $this->cancellationPolicyPayload($booking),
             'cancellation' => $this->cancellationQuotePayload($this->resolveBookingCancellationQuote->handle($booking)),

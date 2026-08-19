@@ -5,9 +5,13 @@ import {
     Check,
     Database,
     FileText,
+    Heart,
     ImageIcon,
     LogIn,
     MapPinned,
+    MessageSquare,
+    Send,
+    Star,
 } from 'lucide-react';
 import { GoogleVenueMap } from '@/components/google-venue-map';
 import Heading from '@/components/heading';
@@ -67,6 +71,31 @@ type VenueDetail = PublicVenue & {
     media: PublicMedia[];
     sources: VenueSource[];
     spots: PublicSpot[];
+    reviews: VenueReview[];
+    review_eligibility: ReviewEligibility;
+};
+
+type VenueReview = {
+    uuid: string;
+    rating: number;
+    title: string | null;
+    body: string | null;
+    operator_response: string | null;
+    operator_responded_at: string | null;
+    created_at: string | null;
+    author: {
+        name: string;
+    };
+};
+
+type ReviewEligibility = {
+    can_review: boolean;
+    reason: 'login_required' | 'no_completed_booking' | null;
+    bookings: {
+        uuid: string;
+        booking_number: string;
+        visited_at: string | null;
+    }[];
 };
 
 type VenueSource = {
@@ -83,6 +112,13 @@ type ClaimOrganization = {
     name: string;
 };
 
+type LegalDocumentLink = {
+    title: string;
+    slug: string;
+    version: string;
+    url: string;
+};
+
 type PageProps = {
     auth: {
         user: {
@@ -97,6 +133,7 @@ export default function MarketplaceFishingVenueShow({
     venue,
     availability_query,
     claim_organizations,
+    legal_documents,
 }: {
     venue: VenueDetail;
     availability_query: {
@@ -104,6 +141,7 @@ export default function MarketplaceFishingVenueShow({
         ends_at: string | null;
     };
     claim_organizations: ClaimOrganization[];
+    legal_documents: Record<string, LegalDocumentLink>;
 }) {
     const { auth } = usePage<PageProps>().props;
     const hasAvailabilityQuery =
@@ -142,6 +180,13 @@ export default function MarketplaceFishingVenueShow({
                                     <Badge variant="outline">
                                         {venueTypeLabels[venue.venue_type]}
                                     </Badge>
+                                </div>
+                                <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <RatingSummary venue={venue} />
+                                    <FavoriteVenueButton
+                                        venue={venue}
+                                        isSignedIn={auth.user !== null}
+                                    />
                                 </div>
                                 {venue.media.length > 1 && (
                                     <MediaStrip
@@ -433,6 +478,7 @@ export default function MarketplaceFishingVenueShow({
                                                 availability_query.ends_at ?? ''
                                             }
                                             customer={auth.user}
+                                            legalDocuments={legal_documents}
                                         />
                                     ) : (
                                         <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
@@ -444,6 +490,8 @@ export default function MarketplaceFishingVenueShow({
                         ))
                     )}
                 </section>
+
+                <ReviewsSection venue={venue} isSignedIn={auth.user !== null} />
             </div>
         </>
     );
@@ -510,6 +558,282 @@ function MediaStrip({
                         </Badge>
                     )}
                 </div>
+            ))}
+        </div>
+    );
+}
+
+function RatingSummary({ venue }: { venue: VenueDetail }) {
+    return (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+            <div className="flex items-center gap-1.5 font-medium">
+                <Star className="size-4 fill-current text-primary" />
+                {venue.rating_average === null || venue.reviews_count === 0
+                    ? 'Brak opinii'
+                    : `${venue.rating_average.toFixed(1)} / 5`}
+            </div>
+            {venue.reviews_count > 0 && (
+                <span className="text-muted-foreground">
+                    {venue.reviews_count} opinii
+                </span>
+            )}
+        </div>
+    );
+}
+
+function FavoriteVenueButton({
+    venue,
+    isSignedIn,
+}: {
+    venue: VenueDetail;
+    isSignedIn: boolean;
+}) {
+    if (!isSignedIn) {
+        return (
+            <Button asChild variant="outline" className="w-full sm:w-fit">
+                <Link href="/login">
+                    <LogIn className="size-4" />
+                    Zaloguj, aby zapisać
+                </Link>
+            </Button>
+        );
+    }
+
+    return (
+        <Form
+            action={`/lowiska/${venue.slug}/favorite`}
+            method={venue.is_favorited ? 'delete' : 'post'}
+            className="w-full sm:w-fit"
+        >
+            {({ processing }) => (
+                <Button
+                    type="submit"
+                    variant={venue.is_favorited ? 'secondary' : 'outline'}
+                    disabled={processing}
+                    className="w-full sm:w-fit"
+                >
+                    <Heart
+                        className={
+                            venue.is_favorited
+                                ? 'size-4 fill-current'
+                                : 'size-4'
+                        }
+                    />
+                    {venue.is_favorited ? 'Ulubione' : 'Dodaj do ulubionych'}
+                </Button>
+            )}
+        </Form>
+    );
+}
+
+function ReviewsSection({
+    venue,
+    isSignedIn,
+}: {
+    venue: VenueDetail;
+    isSignedIn: boolean;
+}) {
+    return (
+        <Card className="shadow-xs">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="size-4 text-muted-foreground" />
+                    Opinie
+                </CardTitle>
+                <CardDescription>
+                    Oceny od wędkarzy po zakończonych rezerwacjach
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <ReviewFormPanel venue={venue} isSignedIn={isSignedIn} />
+
+                {venue.reviews.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                        Brak opublikowanych opinii.
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {venue.reviews.map((review) => (
+                            <ReviewItem key={review.uuid} review={review} />
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+function ReviewFormPanel({
+    venue,
+    isSignedIn,
+}: {
+    venue: VenueDetail;
+    isSignedIn: boolean;
+}) {
+    if (!isSignedIn) {
+        return (
+            <div className="flex flex-col gap-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>Zaloguj się, żeby ocenić łowisko po pobycie.</span>
+                <Button asChild variant="outline">
+                    <Link href="/login">
+                        <LogIn className="size-4" />
+                        Logowanie
+                    </Link>
+                </Button>
+            </div>
+        );
+    }
+
+    if (!venue.review_eligibility.can_review) {
+        return (
+            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                Opinię można dodać po zakończonej, potwierdzonej rezerwacji bez
+                wcześniejszej opinii.
+            </div>
+        );
+    }
+
+    const firstBooking = venue.review_eligibility.bookings[0];
+
+    return (
+        <Form
+            action={`/lowiska/${venue.slug}/reviews`}
+            method="post"
+            className="space-y-4 rounded-md border bg-muted/20 p-4"
+        >
+            {({ processing, errors }) => (
+                <>
+                    {venue.review_eligibility.bookings.length === 1 ? (
+                        <input
+                            type="hidden"
+                            name="booking_uuid"
+                            value={firstBooking.uuid}
+                        />
+                    ) : (
+                        <div className="grid gap-2">
+                            <Label htmlFor="review_booking_uuid">
+                                Rezerwacja
+                            </Label>
+                            <select
+                                id="review_booking_uuid"
+                                name="booking_uuid"
+                                defaultValue={firstBooking.uuid}
+                                className="h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden"
+                                required
+                            >
+                                {venue.review_eligibility.bookings.map(
+                                    (booking) => (
+                                        <option
+                                            key={booking.uuid}
+                                            value={booking.uuid}
+                                        >
+                                            {booking.booking_number}
+                                            {booking.visited_at
+                                                ? ` · ${formatDateTime(booking.visited_at)}`
+                                                : ''}
+                                        </option>
+                                    ),
+                                )}
+                            </select>
+                        </div>
+                    )}
+                    <InputError message={errors.booking_uuid} />
+
+                    <div className="grid gap-4 md:grid-cols-[10rem_minmax(0,1fr)]">
+                        <div className="grid gap-2">
+                            <Label htmlFor="review_rating">Ocena</Label>
+                            <select
+                                id="review_rating"
+                                name="rating"
+                                defaultValue="5"
+                                className="h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden"
+                                required
+                            >
+                                <option value="5">5</option>
+                                <option value="4">4</option>
+                                <option value="3">3</option>
+                                <option value="2">2</option>
+                                <option value="1">1</option>
+                            </select>
+                            <InputError message={errors.rating} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="review_title">Tytuł</Label>
+                            <Input
+                                id="review_title"
+                                name="title"
+                                maxLength={120}
+                            />
+                            <InputError message={errors.title} />
+                        </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="review_body">Treść</Label>
+                        <Textarea id="review_body" name="body" rows={4} />
+                        <InputError message={errors.body} />
+                    </div>
+
+                    <Button type="submit" disabled={processing}>
+                        <Send className="size-4" />
+                        Opublikuj opinię
+                    </Button>
+                </>
+            )}
+        </Form>
+    );
+}
+
+function ReviewItem({ review }: { review: VenueReview }) {
+    return (
+        <article className="rounded-md border p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <div className="font-medium">
+                        {review.title ?? 'Opinia wędkarza'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                        {review.author.name} ·{' '}
+                        {formatDateTime(review.created_at)}
+                    </div>
+                </div>
+                <StarRating rating={review.rating} />
+            </div>
+
+            {review.body && (
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    {review.body}
+                </p>
+            )}
+
+            {review.operator_response && (
+                <div className="mt-4 border-l-2 pl-4 text-sm">
+                    <div className="font-medium">Odpowiedź operatora</div>
+                    <p className="mt-1 leading-6 text-muted-foreground">
+                        {review.operator_response}
+                    </p>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                        {formatDateTime(review.operator_responded_at)}
+                    </div>
+                </div>
+            )}
+        </article>
+    );
+}
+
+function StarRating({ rating }: { rating: number }) {
+    return (
+        <div className="flex items-center gap-0.5" aria-label={`${rating}/5`}>
+            {Array.from({ length: 5 }).map((_, index) => (
+                <Star
+                    key={index}
+                    className={
+                        index < rating
+                            ? 'size-4 fill-current text-primary'
+                            : 'size-4 text-muted-foreground'
+                    }
+                />
             ))}
         </div>
     );
@@ -634,12 +958,18 @@ function BookingForm({
     startsAt,
     endsAt,
     customer,
+    legalDocuments,
 }: {
     spot: PublicSpot;
     startsAt: string;
     endsAt: string;
     customer: PageProps['auth']['user'];
+    legalDocuments: Record<string, LegalDocumentLink>;
 }) {
+    const terms = legalDocuments.TERMS;
+    const privacyPolicy = legalDocuments.PRIVACY_POLICY;
+    const cancellationRules = legalDocuments.CANCELLATION_RULES;
+
     return (
         <Form action="/checkout" method="post" className="space-y-4">
             {({ processing, errors }) => (
@@ -693,6 +1023,88 @@ function BookingForm({
 
                     <InputError message={errors.fishing_spot_uuid} />
                     <InputError message={errors.payment} />
+
+                    <div className="space-y-3 rounded-md border bg-muted/20 p-4 text-sm">
+                        <label className="flex items-start gap-3">
+                            <input
+                                type="checkbox"
+                                name="legal_terms_accepted"
+                                value="1"
+                                required
+                                className="mt-1 size-4 shrink-0 accent-primary"
+                            />
+                            <span className="leading-6">
+                                Akceptuję{' '}
+                                <Link
+                                    href={terms?.url ?? '/regulamin'}
+                                    className="font-medium underline underline-offset-4"
+                                >
+                                    regulamin
+                                </Link>
+                                {terms?.version
+                                    ? ` (wersja ${terms.version})`
+                                    : ''}
+                                .
+                            </span>
+                        </label>
+                        <InputError message={errors.legal_terms_accepted} />
+
+                        <label className="flex items-start gap-3">
+                            <input
+                                type="checkbox"
+                                name="privacy_policy_accepted"
+                                value="1"
+                                required
+                                className="mt-1 size-4 shrink-0 accent-primary"
+                            />
+                            <span className="leading-6">
+                                Potwierdzam zapoznanie z{' '}
+                                <Link
+                                    href={
+                                        privacyPolicy?.url ??
+                                        '/polityka-prywatnosci'
+                                    }
+                                    className="font-medium underline underline-offset-4"
+                                >
+                                    polityką prywatności
+                                </Link>
+                                {privacyPolicy?.version
+                                    ? ` (wersja ${privacyPolicy.version})`
+                                    : ''}
+                                .
+                            </span>
+                        </label>
+                        <InputError message={errors.privacy_policy_accepted} />
+
+                        <label className="flex items-start gap-3">
+                            <input
+                                type="checkbox"
+                                name="cancellation_rules_accepted"
+                                value="1"
+                                required
+                                className="mt-1 size-4 shrink-0 accent-primary"
+                            />
+                            <span className="leading-6">
+                                Akceptuję{' '}
+                                <Link
+                                    href={
+                                        cancellationRules?.url ??
+                                        '/zasady-anulowania'
+                                    }
+                                    className="font-medium underline underline-offset-4"
+                                >
+                                    zasady rezerwacji i anulowania
+                                </Link>
+                                {cancellationRules?.version
+                                    ? ` (wersja ${cancellationRules.version})`
+                                    : ''}
+                                .
+                            </span>
+                        </label>
+                        <InputError
+                            message={errors.cancellation_rules_accepted}
+                        />
+                    </div>
 
                     <Button type="submit" disabled={processing}>
                         <Check className="size-4" />

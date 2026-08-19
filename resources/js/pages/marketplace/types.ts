@@ -26,6 +26,9 @@ export type PublicVenue = {
     available_spots_count: number | null;
     starting_price_amount: number | null;
     currency: string;
+    rating_average: number | null;
+    reviews_count: number;
+    is_favorited: boolean;
     fish_species?: {
         name: string;
         slug: string;

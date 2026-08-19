@@ -28,6 +28,9 @@ class StoreCheckoutRequest extends FormRequest
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:255'],
+            'legal_terms_accepted' => ['accepted'],
+            'privacy_policy_accepted' => ['accepted'],
+            'cancellation_rules_accepted' => ['accepted'],
         ];
     }
 

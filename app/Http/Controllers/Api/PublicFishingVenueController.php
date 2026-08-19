@@ -9,6 +9,7 @@ use App\Modules\Fisheries\Models\FishingSpot;
 use App\Modules\Fisheries\Models\FishingVenue;
 use App\Modules\Fisheries\Queries\FishingVenueGeoQuery;
 use App\Modules\GovernmentData\Models\FishingVenueSource;
+use App\Modules\Reviews\Enums\FishingVenueReviewStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -38,6 +39,8 @@ class PublicFishingVenueController extends Controller
 
         $query = FishingVenue::query()
             ->with('spots')
+            ->withCount(['reviews as reviews_count' => fn ($query) => $query->where('status', FishingVenueReviewStatus::Published->value)])
+            ->withAvg(['reviews as rating_average' => fn ($query) => $query->where('status', FishingVenueReviewStatus::Published->value)], 'rating')
             ->where('status', FishingVenueStatus::Published->value)
             ->whereIn('commercial_status', $this->publicCommercialStatuses())
             ->when($validated['q'] ?? null, fn ($query, string $search) => $query->where('name', 'like', "%{$search}%"))
@@ -67,6 +70,8 @@ class PublicFishingVenueController extends Controller
         abort_unless($this->isPubliclyVisible($fishingVenue), 404);
 
         $fishingVenue->load(['spots', 'sources.dataSource']);
+        $fishingVenue->loadCount(['reviews as reviews_count' => fn ($query) => $query->where('status', FishingVenueReviewStatus::Published->value)]);
+        $fishingVenue->loadAvg(['reviews as rating_average' => fn ($query) => $query->where('status', FishingVenueReviewStatus::Published->value)], 'rating');
 
         return response()->json([
             'venue' => $this->venuePayload($fishingVenue),
@@ -80,6 +85,7 @@ class PublicFishingVenueController extends Controller
     {
         $startingPrice = $venue->spots->min('base_price_amount');
         $firstSpot = $venue->spots->first();
+        $ratingAverage = $venue->getAttribute('rating_average');
 
         return [
             'uuid' => $venue->uuid,
@@ -97,6 +103,8 @@ class PublicFishingVenueController extends Controller
             'distance_km' => $this->fishingVenueGeoQuery->distanceKm($venue, $latitude, $longitude),
             'starting_price_amount' => $startingPrice !== null ? (int) $startingPrice : null,
             'currency' => $firstSpot instanceof FishingSpot ? $firstSpot->currency : 'PLN',
+            'rating_average' => $ratingAverage !== null ? round((float) $ratingAverage, 1) : null,
+            'reviews_count' => (int) ($venue->getAttribute('reviews_count') ?? 0),
             'sources' => $venue->relationLoaded('sources')
                 ? $venue->sources->map(fn (FishingVenueSource $source): array => [
                     'provider' => $source->dataSource->provider,

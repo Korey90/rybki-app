@@ -1,16 +1,27 @@
 <?php
 
 use App\Http\Controllers\Account\BookingController as AccountBookingController;
+use App\Http\Controllers\Account\FavoriteVenueController as AccountFavoriteVenueController;
 use App\Http\Controllers\Admin\AuditLogController as AdminAuditLogController;
+use App\Http\Controllers\Admin\BookingController as AdminBookingController;
 use App\Http\Controllers\Admin\FishingVenueClaimController as AdminFishingVenueClaimController;
+use App\Http\Controllers\Admin\FishingVenueController as AdminFishingVenueController;
+use App\Http\Controllers\Admin\FishingVenueReviewController as AdminFishingVenueReviewController;
 use App\Http\Controllers\Admin\GovernmentDataController as AdminGovernmentDataController;
+use App\Http\Controllers\Admin\OperatorController as AdminOperatorController;
+use App\Http\Controllers\Admin\OrganizationController as AdminOrganizationController;
+use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Admin\PaymentProviderController as AdminPaymentProviderController;
 use App\Http\Controllers\Admin\PaymentReconciliationController as AdminPaymentReconciliationController;
 use App\Http\Controllers\Admin\SettlementController as AdminSettlementController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Auth\AuthenticatedHomeController;
+use App\Http\Controllers\LegalDocumentController;
 use App\Http\Controllers\Marketplace\CheckoutController as MarketplaceCheckoutController;
 use App\Http\Controllers\Marketplace\FishingVenueClaimController as MarketplaceFishingVenueClaimController;
 use App\Http\Controllers\Marketplace\FishingVenueController as MarketplaceFishingVenueController;
+use App\Http\Controllers\Marketplace\FishingVenueFavoriteController as MarketplaceFishingVenueFavoriteController;
+use App\Http\Controllers\Marketplace\FishingVenueReviewController as MarketplaceFishingVenueReviewController;
 use App\Http\Controllers\Marketplace\HomeController as MarketplaceHomeController;
 use App\Http\Controllers\Operator\AvailabilityBlockController as OperatorAvailabilityBlockController;
 use App\Http\Controllers\Operator\AvailabilityRuleController as OperatorAvailabilityRuleController;
@@ -22,12 +33,28 @@ use App\Http\Controllers\Operator\FishingSpotController as OperatorFishingSpotCo
 use App\Http\Controllers\Operator\FishingSpotMediaController as OperatorFishingSpotMediaController;
 use App\Http\Controllers\Operator\FishingVenueController as OperatorFishingVenueController;
 use App\Http\Controllers\Operator\FishingVenueMediaController as OperatorFishingVenueMediaController;
+use App\Http\Controllers\Operator\FishingVenueReviewController as OperatorFishingVenueReviewController;
 use App\Http\Controllers\Operator\OrganizationController as OperatorOrganizationController;
 use App\Http\Controllers\Operator\PricingRuleController as OperatorPricingRuleController;
 use App\Http\Controllers\Operator\SettlementController as OperatorSettlementController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', MarketplaceHomeController::class)->name('home');
+Route::get('regulamin', [LegalDocumentController::class, 'show'])
+    ->defaults('slug', 'regulamin')
+    ->name('legal.terms');
+Route::get('polityka-prywatnosci', [LegalDocumentController::class, 'show'])
+    ->defaults('slug', 'polityka-prywatnosci')
+    ->name('legal.privacy');
+Route::get('zasady-anulowania', [LegalDocumentController::class, 'show'])
+    ->defaults('slug', 'zasady-anulowania')
+    ->name('legal.cancellation');
+Route::get('kontakt', [LegalDocumentController::class, 'show'])
+    ->defaults('slug', 'kontakt')
+    ->name('legal.contact');
+Route::get('dla-operatorow', [LegalDocumentController::class, 'show'])
+    ->defaults('slug', 'dla-operatorow')
+    ->name('legal.operators');
 Route::get('lowiska', [MarketplaceFishingVenueController::class, 'index'])
     ->name('marketplace.fishing-venues.index');
 Route::get('lowiska/{fishingVenue:slug}', [MarketplaceFishingVenueController::class, 'show'])
@@ -51,10 +78,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('konto/rezerwacje/{booking}/cancel', [AccountBookingController::class, 'cancel'])
         ->middleware('throttle:checkout')
         ->name('account.bookings.cancel');
+    Route::get('konto/ulubione', [AccountFavoriteVenueController::class, 'index'])
+        ->name('account.favorites.index');
 
     Route::post('lowiska/{fishingVenue:slug}/claim', [MarketplaceFishingVenueClaimController::class, 'store'])
         ->middleware('throttle:claims')
         ->name('marketplace.fishing-venues.claims.store');
+    Route::post('lowiska/{fishingVenue:slug}/favorite', [MarketplaceFishingVenueFavoriteController::class, 'store'])
+        ->name('marketplace.fishing-venues.favorites.store');
+    Route::delete('lowiska/{fishingVenue:slug}/favorite', [MarketplaceFishingVenueFavoriteController::class, 'destroy'])
+        ->name('marketplace.fishing-venues.favorites.destroy');
+    Route::post('lowiska/{fishingVenue:slug}/reviews', [MarketplaceFishingVenueReviewController::class, 'store'])
+        ->middleware('throttle:checkout')
+        ->name('marketplace.fishing-venues.reviews.store');
 });
 
 Route::middleware(['auth', 'verified'])
@@ -79,6 +115,11 @@ Route::middleware(['auth', 'verified'])
 
         Route::get('calendar', [OperatorCalendarController::class, 'index'])
             ->name('calendar.index');
+
+        Route::get('reviews', [OperatorFishingVenueReviewController::class, 'index'])
+            ->name('reviews.index');
+        Route::patch('reviews/{fishingVenueReview}/response', [OperatorFishingVenueReviewController::class, 'respond'])
+            ->name('reviews.response');
 
         Route::get('settlements', [OperatorSettlementController::class, 'index'])
             ->name('settlements.index');
@@ -133,6 +174,42 @@ Route::middleware(['auth', 'verified', 'admin', 'throttle:admin'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function (): void {
+        Route::get('users', [AdminUserController::class, 'index'])
+            ->name('users.index');
+        Route::get('users/export', [AdminUserController::class, 'export'])
+            ->name('users.export');
+
+        Route::get('operators', [AdminOperatorController::class, 'index'])
+            ->name('operators.index');
+        Route::get('operators/export', [AdminOperatorController::class, 'export'])
+            ->name('operators.export');
+
+        Route::get('organizations', [AdminOrganizationController::class, 'index'])
+            ->name('organizations.index');
+        Route::get('organizations/export', [AdminOrganizationController::class, 'export'])
+            ->name('organizations.export');
+
+        Route::get('fishing-venues', [AdminFishingVenueController::class, 'index'])
+            ->name('fishing-venues.index');
+        Route::get('fishing-venues/export', [AdminFishingVenueController::class, 'export'])
+            ->name('fishing-venues.export');
+        Route::patch('fishing-venues/{fishingVenue}', [AdminFishingVenueController::class, 'moderate'])
+            ->name('fishing-venues.moderate');
+        Route::patch('fishing-venues/media/{media}', [AdminFishingVenueController::class, 'moderateVenueMedia'])
+            ->name('fishing-venues.media.moderate');
+        Route::patch('fishing-venues/spot-media/{media}', [AdminFishingVenueController::class, 'moderateSpotMedia'])
+            ->name('fishing-venues.spot-media.moderate');
+
+        Route::get('bookings', [AdminBookingController::class, 'index'])
+            ->name('bookings.index');
+        Route::get('bookings/export', [AdminBookingController::class, 'export'])
+            ->name('bookings.export');
+
+        Route::get('payments', [AdminPaymentController::class, 'index'])
+            ->name('payments.index');
+        Route::get('payments/export', [AdminPaymentController::class, 'export'])
+            ->name('payments.export');
+
         Route::get('audit-logs', [AdminAuditLogController::class, 'index'])
             ->name('audit-logs.index');
 
@@ -167,6 +244,11 @@ Route::middleware(['auth', 'verified', 'admin', 'throttle:admin'])
             ->name('settlements.payout.update');
         Route::get('settlements/{settlementPeriod}/export', [AdminSettlementController::class, 'export'])
             ->name('settlements.export');
+
+        Route::get('reviews', [AdminFishingVenueReviewController::class, 'index'])
+            ->name('reviews.index');
+        Route::patch('reviews/{fishingVenueReview}', [AdminFishingVenueReviewController::class, 'moderate'])
+            ->name('reviews.moderate');
 
         Route::get('venue-claims', [AdminFishingVenueClaimController::class, 'index'])
             ->name('venue-claims.index');

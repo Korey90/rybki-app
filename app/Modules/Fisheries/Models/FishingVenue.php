@@ -2,6 +2,7 @@
 
 namespace App\Modules\Fisheries\Models;
 
+use App\Models\User;
 use App\Modules\Bookings\Models\Booking;
 use App\Modules\Fisheries\Enums\FishingVenueCommercialStatus;
 use App\Modules\Fisheries\Enums\FishingVenueStatus;
@@ -9,6 +10,9 @@ use App\Modules\Fisheries\Enums\FishingVenueType;
 use App\Modules\GovernmentData\Models\FishingVenueClaim;
 use App\Modules\GovernmentData\Models\FishingVenueSource;
 use App\Modules\Organizations\Models\Organization;
+use App\Modules\Reviews\Enums\FishingVenueReviewStatus;
+use App\Modules\Reviews\Models\FishingVenueFavorite;
+use App\Modules\Reviews\Models\FishingVenueReview;
 use Database\Factories\FishingVenueFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -45,6 +49,9 @@ use Illuminate\Support\Str;
  * @property string|null $check_in_instructions
  * @property FishingVenueStatus $status
  * @property Carbon|null $published_at
+ * @property string|null $moderation_reason
+ * @property int|null $moderated_by_user_id
+ * @property Carbon|null $moderated_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -70,6 +77,9 @@ use Illuminate\Support\Str;
     'check_in_instructions',
     'status',
     'published_at',
+    'moderation_reason',
+    'moderated_by_user_id',
+    'moderated_at',
 ])]
 class FishingVenue extends Model
 {
@@ -96,6 +106,7 @@ class FishingVenue extends Model
             'commercial_status' => FishingVenueCommercialStatus::class,
             'status' => FishingVenueStatus::class,
             'published_at' => 'datetime',
+            'moderated_at' => 'datetime',
         ];
     }
 
@@ -128,6 +139,14 @@ class FishingVenue extends Model
     }
 
     /**
+     * @return BelongsTo<User, $this>
+     */
+    public function moderator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'moderated_by_user_id');
+    }
+
+    /**
      * @return HasMany<FishingSpot, $this>
      */
     public function spots(): HasMany
@@ -141,6 +160,40 @@ class FishingVenue extends Model
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
+    }
+
+    /**
+     * @return HasMany<FishingVenueFavorite, $this>
+     */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(FishingVenueFavorite::class);
+    }
+
+    /**
+     * @return BelongsToMany<User, $this>
+     */
+    public function favoritedByUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'fishing_venue_favorites')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<FishingVenueReview, $this>
+     */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(FishingVenueReview::class);
+    }
+
+    /**
+     * @return HasMany<FishingVenueReview, $this>
+     */
+    public function publishedReviews(): HasMany
+    {
+        return $this->hasMany(FishingVenueReview::class)
+            ->where('status', FishingVenueReviewStatus::Published->value);
     }
 
     /**

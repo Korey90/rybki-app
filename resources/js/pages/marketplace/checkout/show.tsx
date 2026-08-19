@@ -1,5 +1,11 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
-import { Check, CreditCard, ExternalLink, MapPinned } from 'lucide-react';
+import {
+    Check,
+    CreditCard,
+    ExternalLink,
+    FileText,
+    MapPinned,
+} from 'lucide-react';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +70,12 @@ type CheckoutBooking = {
         paid_at: string | null;
         failed_at: string | null;
     }[];
+    legal_acceptances: {
+        document_type: string;
+        document_version: string;
+        context: string;
+        accepted_at: string;
+    }[];
     cancellation_policy: {
         name: string;
         free_cancellation_hours: number;
@@ -94,6 +106,21 @@ type PageProps = {
         } | null;
     };
     errors?: Record<string, string>;
+};
+
+const legalDocumentRoutes: Record<string, { label: string; href: string }> = {
+    TERMS: {
+        label: 'Regulamin',
+        href: '/regulamin',
+    },
+    PRIVACY_POLICY: {
+        label: 'Polityka prywatności',
+        href: '/polityka-prywatnosci',
+    },
+    CANCELLATION_RULES: {
+        label: 'Zasady anulowania',
+        href: '/zasady-anulowania',
+    },
 };
 
 export default function CheckoutShow({
@@ -214,6 +241,61 @@ export default function CheckoutShow({
                                         booking.cancellation.currency,
                                     )}
                                 />
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <FileText className="size-4 text-muted-foreground" />
+                                    Dokumenty i akceptacje
+                                </CardTitle>
+                                <CardDescription>
+                                    Wersje zapisane przy składaniu rezerwacji
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {booking.legal_acceptances.map((acceptance) => {
+                                    const document =
+                                        legalDocumentRoutes[
+                                            acceptance.document_type
+                                        ];
+
+                                    return (
+                                        <div
+                                            key={`${acceptance.document_type}-${acceptance.document_version}`}
+                                            className="flex flex-col gap-2 rounded-md border bg-muted/20 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                                        >
+                                            <div>
+                                                <div className="font-medium">
+                                                    {document?.label ??
+                                                        acceptance.document_type}
+                                                </div>
+                                                <div className="text-muted-foreground">
+                                                    wersja{' '}
+                                                    {
+                                                        acceptance.document_version
+                                                    }{' '}
+                                                    ·{' '}
+                                                    {formatDateTime(
+                                                        acceptance.accepted_at,
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {document && (
+                                                <Button
+                                                    asChild
+                                                    variant="outline"
+                                                    size="sm"
+                                                >
+                                                    <Link href={document.href}>
+                                                        Otwórz
+                                                    </Link>
+                                                </Button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </CardContent>
                         </Card>
 

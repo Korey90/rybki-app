@@ -200,6 +200,44 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </header>
 
             <main>{children}</main>
+
+            <footer className="border-t bg-muted/20">
+                <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between md:px-6">
+                    <div>Rybki - marketplace rezerwacji łowisk</div>
+                    <nav className="flex flex-wrap gap-x-4 gap-y-2">
+                        <Link
+                            href="/regulamin"
+                            className="transition hover:text-foreground"
+                        >
+                            Regulamin
+                        </Link>
+                        <Link
+                            href="/polityka-prywatnosci"
+                            className="transition hover:text-foreground"
+                        >
+                            Prywatność
+                        </Link>
+                        <Link
+                            href="/zasady-anulowania"
+                            className="transition hover:text-foreground"
+                        >
+                            Anulowanie
+                        </Link>
+                        <Link
+                            href="/kontakt"
+                            className="transition hover:text-foreground"
+                        >
+                            Kontakt
+                        </Link>
+                        <Link
+                            href="/dla-operatorow"
+                            className="transition hover:text-foreground"
+                        >
+                            Dla operatorów
+                        </Link>
+                    </nav>
+                </div>
+            </footer>
         </div>
     );
 }

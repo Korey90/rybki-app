@@ -9,6 +9,7 @@ use App\Modules\Fisheries\Enums\FishingVenueCommercialStatus;
 use App\Modules\Fisheries\Enums\FishingVenueStatus;
 use App\Modules\Fisheries\Models\FishingSpot;
 use App\Modules\Fisheries\Models\FishingVenue;
+use App\Modules\Legal\Enums\LegalDocumentType;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Payments\Enums\PaymentProvider;
 use App\Modules\Payments\Enums\PaymentStatus;
@@ -96,6 +97,9 @@ test('angler can checkout a booking and confirm a test payment', function () {
         'customer_name' => 'Jan Kowalski',
         'customer_email' => 'jan@example.com',
         'customer_phone' => '+48123123123',
+        'legal_terms_accepted' => '1',
+        'privacy_policy_accepted' => '1',
+        'cancellation_rules_accepted' => '1',
     ]);
 
     $booking = Booking::query()->with(['spotReservations', 'payments'])->firstOrFail();
@@ -107,11 +111,27 @@ test('angler can checkout a booking and confirm a test payment', function () {
         ->and($booking->spotReservations->firstOrFail()->status)->toBe(ReservationStatus::Hold)
         ->and($booking->payments->firstOrFail()->status)->toBe(PaymentStatus::Created);
 
+    foreach ([
+        LegalDocumentType::Terms,
+        LegalDocumentType::PrivacyPolicy,
+        LegalDocumentType::CancellationRules,
+    ] as $documentType) {
+        $this->assertDatabaseHas('legal_acceptances', [
+            'user_id' => $user->id,
+            'booking_id' => $booking->id,
+            'customer_email' => 'jan@example.com',
+            'document_type' => $documentType->value,
+            'document_version' => '2026.08.12-mvp',
+            'context' => 'checkout',
+        ]);
+    }
+
     $this->get(route('checkout.show', $booking))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('marketplace/checkout/show')
             ->where('booking.uuid', $booking->uuid)
+            ->has('booking.legal_acceptances', 3)
             ->where('payment_session.provider', PaymentProvider::Test->value));
 
     $this->post(route('checkout.test-payment', $booking))

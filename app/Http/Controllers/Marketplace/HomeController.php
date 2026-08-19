@@ -13,6 +13,7 @@ use App\Modules\Fisheries\Models\FishingVenue;
 use App\Modules\Fisheries\Models\FishingVenueMedia;
 use App\Modules\Fisheries\Models\FishSpecies;
 use App\Modules\Fisheries\Support\FishingMediaPayload;
+use App\Modules\Reviews\Enums\FishingVenueReviewStatus;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -29,9 +30,11 @@ class HomeController extends Controller
             ->with([
                 'amenities',
                 'fishSpecies',
-                'media' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
+                'media' => fn ($query) => $query->whereNull('hidden_at')->orderBy('sort_order')->orderBy('id'),
                 'spots' => fn ($query) => $query->orderBy('base_price_amount'),
             ])
+            ->withCount(['reviews as reviews_count' => fn ($query) => $query->where('status', FishingVenueReviewStatus::Published->value)])
+            ->withAvg(['reviews as rating_average' => fn ($query) => $query->where('status', FishingVenueReviewStatus::Published->value)], 'rating')
             ->where('status', FishingVenueStatus::Published->value)
             ->whereIn('commercial_status', $this->publicCommercialStatuses())
             ->latest('published_at')
@@ -66,6 +69,7 @@ class HomeController extends Controller
         $firstSpot = $venue->spots->first();
         $currency = $firstSpot instanceof FishingSpot ? $firstSpot->currency : 'PLN';
         $primaryMedia = $venue->media->first();
+        $ratingAverage = $venue->getAttribute('rating_average');
 
         return [
             'uuid' => $venue->uuid,
@@ -87,6 +91,9 @@ class HomeController extends Controller
             'distance_km' => null,
             'starting_price_amount' => $startingPrice !== null ? (int) $startingPrice : null,
             'currency' => $currency,
+            'rating_average' => $ratingAverage !== null ? round((float) $ratingAverage, 1) : null,
+            'reviews_count' => (int) ($venue->getAttribute('reviews_count') ?? 0),
+            'is_favorited' => false,
             'fish_species' => $venue->fishSpecies->map(fn (FishSpecies $species): array => [
                 'name' => $species->name,
                 'slug' => $species->slug,
